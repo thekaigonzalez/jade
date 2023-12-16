@@ -1,0 +1,61 @@
+#!/usr/bin/env perl
+# $Id: build.plf
+
+use File::Which;
+
+my $zig = which("zig");
+
+my $rel = false;
+
+my $OPTIMIZATION_FLAGS = '';
+
+if ( $ARGV[0] eq 'release' ) {
+    $rel = true;
+    $OPTIMIZATION_FLAGS = '-O ReleaseFast -Drelease-fast -fsingle-threaded';
+}
+
+if ( !-f '.gitignore' or -m '.gitignore' < 5 ) { # been a while lets upgrade it
+    print "[build] creating .gitignore\n";
+    open my $fh, '>', '.gitignore'
+      or print
+"[build] note: could not create .gitignore: don't know but still going through with it.\n";
+    print $fh ".jbuild\n*.o\njade_tests\n.vstags\n.vscode\n*.bin\n";
+    close $fh;
+}
+
+if ( defined $zig ) {
+    print "[build] zig found: $zig\n";
+    print "[build] building VJTest.zig\n";
+
+    if ( not -d ".jbuild" ) {
+        `mkdir .jbuild`;
+    }
+
+    # compare both VJTest.zig and .jbuild/VJTest.zig
+
+    # if ( -f '.jbuild/VJTest.zig' ) {
+    #     if ( !`cmp VJTest.zig .jbuild/VJTest.zig` ) {
+    #         print "[build] note: no source code changes!\n";
+    #         goto skip;
+    #     }
+    # }
+
+    `$zig build-exe VJTest.zig --name jade_tests $OPTIMIZATION_FLAGS`;
+
+skip:
+
+    `cp VJTest.zig .jbuild/`;
+}
+
+print "[build] clean artifacts (*.o)\n";
+
+my $artifacts_removed = 0;
+
+for (`ls`) {
+    if (/\.o/) {
+        `rm $_`;
+        $artifacts_removed += 1;
+    }
+}
+
+printf "[build] removed %d artifacts\n", $artifacts_removed;

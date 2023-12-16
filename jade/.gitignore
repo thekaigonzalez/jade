@@ -1,0 +1,6 @@
+.jbuild
+*.o
+jade_tests
+.vstags
+.vscode
+*.bin
