@@ -104,78 +104,89 @@ pub fn main() !void {
         std.process.exit(1);
     }
 
+    // check if file exsits
+    const dir = std.fs.Dir.access;
+
+    dir(std.fs.cwd(), argparser.positional.items[0], .{}) catch {
+        std.debug.print("jade: error: file not found: `{s}'\n", .{argparser.positional.items[0]});
+        std.process.exit(1);
+    };
+
+    var preloader = jade_Preloader.create();
+    var preloader8bit = jade_Preloader8Bit.create();
+
     if (bits == 32) {
-        // check if file exsits
-        const dir = std.fs.Dir.access;
-
-        dir(std.fs.cwd(), argparser.positional.items[0], .{}) catch {
-            std.debug.print("jade: error: file not found: `{s}'\n", .{argparser.positional.items[0]});
-            std.process.exit(1);
-        };
-
-        var preloader = jade_Preloader.create();
-
         try preloader.load(argparser.positional.items[0]);
+    } else {
+        try preloader8bit.load(argparser.positional.items[0]);
+    }
 
-        var op_level = jade_OpFlag.none;
+    var dat: []i32 = undefined;
 
-        if (std.mem.eql(u8, optimizations.convert([]const u8), "0")) {
-            op_level = .none;
-        } else if (std.mem.eql(u8, optimizations.convert([]const u8), "2")) {
-            op_level = .level2;
-        } else if (std.mem.eql(u8, optimizations.convert([]const u8), "fast")) {
-            op_level = .aggressive;
-        }
+    if (bits == 32) {
+        dat = preloader.data;
+    } else {
+        dat = preloader8bit.convert_32bit(preloader8bit.data);
+    }
 
-        var cpu = jade_Cpu.create();
-        cpu.ruleset = jade_Rules.init(engine.convert([]const u8));
-        cpu.set_allocator(arena_allocator.allocator());
+    var op_level = jade_OpFlag.none;
 
-        if (rasterized.convert(bool)) {
-            cpu.mode = .ras;
-        }
+    if (std.mem.eql(u8, optimizations.convert([]const u8), "0")) {
+        op_level = .none;
+    } else if (std.mem.eql(u8, optimizations.convert([]const u8), "2")) {
+        op_level = .level2;
+    } else if (std.mem.eql(u8, optimizations.convert([]const u8), "fast")) {
+        op_level = .aggressive;
+    }
 
-        var op_frame: jade_OpFrame = undefined;
+    var cpu = jade_Cpu.create();
+    cpu.ruleset = jade_Rules.init(engine.convert([]const u8));
+    cpu.set_allocator(arena_allocator.allocator());
 
-        op_frame = jade_Optimize32(arena_allocator.allocator(), op_level, preloader.data, &cpu);
+    if (rasterized.convert(bool)) {
+        cpu.mode = .ras;
+    }
 
-        if (tracer.convert(bool)) {
-            cpu.start_tracer(arena_allocator.allocator());
-        }
+    var op_frame: jade_OpFrame = undefined;
 
-        var controller = jade_VJController32.new(&cpu);
+    op_frame = jade_Optimize32(arena_allocator.allocator(), op_level, dat, &cpu);
 
-        var hashy = jade_Hash.create(arena_allocator.allocator());
+    if (tracer.convert(bool)) {
+        cpu.start_tracer(arena_allocator.allocator());
+    }
 
-        const mov_fn = jade_FromU8Const(arena_allocator.allocator(), "mov");
+    var controller = jade_VJController32.new(&cpu);
 
-        try hashy.set(41, mov_fn);
-        try hashy.set(41, mov_fn);
-        try hashy.set(41, mov_fn);
+    var hashy = jade_Hash.create(arena_allocator.allocator());
 
-        if (as_text.convert(bool)) {
-            const jade_stringify = jade_Stringify;
+    const mov_fn = jade_FromU8Const(arena_allocator.allocator(), "mov");
 
-            std.debug.print("{s}", .{(try jade_stringify(arena_allocator.allocator(), &hashy, 32, preloader.data, cpu.ruleset.?)).read()});
-            std.process.exit(0);
-        }
+    try hashy.set(41, mov_fn);
+    try hashy.set(41, mov_fn);
+    try hashy.set(41, mov_fn);
 
-        if (delimited.convert(bool)) {
-            controller.classic_runtime = jade_OldRuntime32.new(arena_allocator.allocator());
+    if (as_text.convert(bool)) {
+        const jade_stringify = jade_Stringify;
 
-            // add the standard runtime
-            try controller.classic_runtime.bind(40, VJRuntimeAbstractions.CVJECHOFunction);
-            try controller.classic_runtime.bind(41, VJRuntimeAbstractions.CVJMOVFunction);
-            try controller.classic_runtime.bind(42, VJRuntimeAbstractions.CVJEACHFunction);
+        std.debug.print("{s}", .{(try jade_stringify(arena_allocator.allocator(), &hashy, 32, preloader.data, cpu.ruleset.?)).read()});
+        std.process.exit(0);
+    }
 
-            try controller.run_bytecode_classic(op_frame.get_frame());
-        } else {
-            std.debug.print("jade: fatal: stripped bytecode is not supported (rerun with -I)\n", .{});
-        }
+    if (delimited.convert(bool)) {
+        controller.classic_runtime = jade_OldRuntime32.new(arena_allocator.allocator());
 
-        if (tracer.convert(bool)) {
-            cpu.print_tracer();
-        }
+        // add the standard runtime
+        try controller.classic_runtime.bind(40, VJRuntimeAbstractions.CVJECHOFunction);
+        try controller.classic_runtime.bind(41, VJRuntimeAbstractions.CVJMOVFunction);
+        try controller.classic_runtime.bind(42, VJRuntimeAbstractions.CVJEACHFunction);
+
+        try controller.run_bytecode_classic(op_frame.get_frame());
+    } else {
+        std.debug.print("jade: fatal: stripped bytecode is not supported (rerun with -I)\n", .{});
+    }
+
+    if (tracer.convert(bool)) {
+        cpu.print_tracer();
     }
 
     std.process.argsFree(arena_allocator.allocator(), args);
