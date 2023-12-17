@@ -128,7 +128,7 @@ pub const jade_Flags = struct {
 };
 
 pub const jade_ArgumentParser = struct {
-    flags: std.ArrayList(jade_Flag),
+    flags: jade_Flags,
     positional: std.ArrayList([]const u8),
     allocator: std.mem.Allocator,
     usage: []const u8 = "",
@@ -137,7 +137,7 @@ pub const jade_ArgumentParser = struct {
 
     pub fn create(allocator: std.mem.Allocator) jade_ArgumentParser {
         return jade_ArgumentParser{
-            .flags = std.ArrayList(jade_Flag).init(allocator),
+            .flags = jade_Flags.create(allocator),
             .positional = std.ArrayList([]const u8).init(allocator),
             .allocator = allocator,
         };
@@ -160,22 +160,15 @@ pub const jade_ArgumentParser = struct {
             setup.value = "0";
         }
 
-        self.flags.append(setup) catch {
-            std.debug.print("jade: error: out of memory\n", .{});
-            std.process.exit(1);
-        };
+        self.flags.append(setup);
 
-        std.debug.print("lent: {d}\n", .{self.flags.items.len});
-
-        std.debug.print("last: {}\n", .{self.flags.items[self.flags.items.len - 1].short});
-        return &self.flags.items[self.flags.items.len - 1];
+        return &self.flags.flags[self.flags.length - 1];
     }
 
     pub fn search_flag_long(self: *jade_ArgumentParser, flag: []const u8) ?*jade_Flag {
-        for (0..self.flags.items.len) |i| {
-            if (std.mem.eql(u8, self.flags.items[i].long, flag)) {
-                std.debug.print("found: {s}\n", .{self.flags.items[i].long});
-                return &self.flags.items[i];
+        for (0..self.flags.length) |i| {
+            if (std.mem.eql(u8, self.flags.flags[i].long, flag)) {
+                return &self.flags.flags[i];
             }
         }
 
@@ -183,9 +176,9 @@ pub const jade_ArgumentParser = struct {
     }
 
     pub fn search_flag_short(self: *jade_ArgumentParser, flag: u8) ?*jade_Flag {
-        for (0..self.flags.items.len) |i| {
-            if (self.flags.items[i].short == flag) {
-                return &self.flags.items[i];
+        for (0..self.flags.length) |i| {
+            if (self.flags.flags[i].short == flag) {
+                return &self.flags.flags[i];
             }
         }
 
@@ -193,11 +186,26 @@ pub const jade_ArgumentParser = struct {
     }
 
     pub fn parse_args(self: *jade_ArgumentParser, args: [][]const u8) !void {
+        var state: i32 = 0;
+
+        var last_flag: u8 = 0;
+
         for (args) |item| {
             const typeof = jade_AssumeFlagType(item);
 
             if (typeof == .positional) {
-                try self.positional.append(item);
+                if (state == 0) {
+                    try self.positional.append(item);
+                } else if (state == 1) {
+                    const fala = self.search_flag_short(last_flag);
+
+                    if (fala != null) {
+                        fala.?.set_value(item);
+                    }
+                    state = 0;
+
+                    last_flag = 0;
+                }
             } else if (typeof == .long) {
                 const stripped = item[2..];
 
@@ -215,17 +223,14 @@ pub const jade_ArgumentParser = struct {
 
                 if (flag.?.type == .boolean) {
                     flag.?.set_value("true");
-                } else if (flag.?.type == .string) {
-                    if (flag.?.value == null) {
-                        flag.?.set_value(item);
-                    }
                 } else if (flag.?.type == .number) {
                     flag.?.set_value(item);
+                } else {
+                    state = 1;
+                    last_flag = flag.?.short;
                 }
             } else if (typeof == .short) {
                 const stripped = item[1..];
-
-                std.debug.print("short: {s}\n", .{stripped});
 
                 for (0..stripped.len) |i| { // Compound flags
                     const flag = self.search_flag_short(stripped[i]);
@@ -242,15 +247,12 @@ pub const jade_ArgumentParser = struct {
 
                     if (flag.?.type == .boolean) {
                         flag.?.set_value("true");
-                    } else if (flag.?.type == .string) {
-                        if (flag.?.value == null) {
-                            flag.?.set_value(item);
-                        }
-                    } else if (flag.?.type == .number) {
-                        flag.?.set_value(item);
                     } else if (flag.?.type == .compound_any) {
                         flag.?.set_value(stripped[i + 1 ..]);
                         break;
+                    } else {
+                        state = 1;
+                        last_flag = flag.?.short;
                     }
                 }
             }
@@ -260,14 +262,14 @@ pub const jade_ArgumentParser = struct {
     pub fn print_help(self: *jade_ArgumentParser) void {
         std.debug.print("usage: {s}\n{s}\nOptions:\n", .{ self.usage, self.desc });
 
-        for (0..self.flags.items.len) |j| {
-            std.debug.print("\t-{c}\t\t{s}\n", .{ self.flags.items[j].short, self.flags.items[j].description });
+        for (0..self.flags.length) |j| {
+            std.debug.print("\t-{c}\t\t{s}\n", .{ self.flags.flags[j].short, self.flags.flags[j].description });
         }
     }
 
     pub fn flag_exists(self: *jade_ArgumentParser, short: u8) bool {
-        for (0..self.flags.items.len) |i| {
-            if (self.flags.items[i].short == short) {
+        for (0..self.flags.length) |i| {
+            if (self.flags.flags[i].short == short) {
                 return true;
             }
         }
@@ -280,14 +282,13 @@ pub fn main() !void {
 
     const args = try std.process.argsAlloc(arena_allocator.allocator());
 
-    std.debug.print("args: {s}\n", .{args});
-
     var argparser = jade_ArgumentParser.create(arena_allocator.allocator());
     argparser.set3("test [-fh]", "A Test Program.", "test");
 
     var flag1 = try argparser.add_flag('f', "flag", .compound_any, "this is a flag");
     var help = try argparser.add_flag('h', "help", .boolean, "this is a help");
     const help2 = try argparser.add_flag('a', "help2", .boolean, "this is a help");
+    _ = help2;
     _ = help2;
     const flag4 = try argparser.add_flag('b', "flag4", .compound_any, "this is a flag");
     _ = flag4;

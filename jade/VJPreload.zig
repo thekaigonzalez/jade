@@ -18,7 +18,7 @@ pub fn jade_BuiltinLoadbyteCode(comptime T: type, width: usize, path: []const u8
     // read the file
     const sizeof_file = file.getEndPos() catch 0;
 
-    if (sizeof_file % 4 != 0 and width == 32) { // 32-bit (u32)
+    if (sizeof_file % 4 != 0 and width == 32) { // 32-bit (i32)
         std.debug.print("jade: file is not 32-bit aligned\n", .{});
         return undefined;
     } else if (sizeof_file % 2 != 0 and width == 8) { // 8-bit (u8)
@@ -27,12 +27,13 @@ pub fn jade_BuiltinLoadbyteCode(comptime T: type, width: usize, path: []const u8
     }
 
     if (width == 32) {
-        const other_growable = try std.heap.page_allocator.alloc(T, sizeof_file / 4);
+        const other_growable = try std.heap.page_allocator.alloc(T, sizeof_file);
 
         const reader = file.reader();
 
         for (0..sizeof_file / 4) |i| {
             const integ = try reader.readInt(T, std.builtin.Endian.little);
+
             other_growable[i] = integ;
         }
 
@@ -41,7 +42,6 @@ pub fn jade_BuiltinLoadbyteCode(comptime T: type, width: usize, path: []const u8
         return other_growable;
     } else if (width == 8) {
         const other_growable = try std.heap.page_allocator.alloc(T, sizeof_file);
-        defer std.heap.page_allocator.free(other_growable);
 
         const reader = file.reader();
 
@@ -66,24 +66,37 @@ pub const jade_VJ8BitPreloader = struct {
     }
 
     pub fn load(self: *jade_VJ8BitPreloader, path: []const u8) !void {
-        self.data = try jade_BuiltinLoadbyteCode(u8, 8, path);
+        const bytes = try jade_BuiltinLoadbyteCode(u8, 8, path);
+        self.data = bytes;
+    }
 
-        if (self.data == undefined) {
-            std.debug.print("jade: error: file is not 8-bit aligned\n", .{});
+    /// converts the internal data into all 32-bit signed integers
+    pub fn convert_32bit(self: *jade_VJ8BitPreloader, pre: []u8) []i32 {
+        _ = self;
+
+        const new_data = std.heap.page_allocator.alloc(i32, pre.len) catch {
+            std.debug.print("jade: error: out of memory\n", .{});
             std.process.exit(1);
-            return;
+        };
+
+        for (0..pre.len) |i| {
+            const n: i32 = @intCast(pre[i]);
+
+            new_data[i] = n;
         }
+
+        return new_data;
     }
 };
 
 pub const jade_VJ32BitPreloader = struct {
-    data: []u32,
+    data: []i32,
 
     pub fn create() jade_VJ32BitPreloader {
         return jade_VJ32BitPreloader{ .data = undefined };
     }
 
     pub fn load(self: *jade_VJ32BitPreloader, path: []const u8) !void {
-        self.data = try jade_BuiltinLoadbyteCode(u32, 32, path);
+        self.data = try jade_BuiltinLoadbyteCode(i32, 32, path);
     }
 };

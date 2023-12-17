@@ -6,6 +6,10 @@
 //! * etc.
 //! 
 //! Essentially just defines CPU states for bytecode
+//!
+//! Supports: 32-bit ✅
+//! Supports: 8-bit  ✅
+//! 
 
 // $Id: VJCpuState.zig
 

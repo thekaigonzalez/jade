@@ -4,4 +4,6 @@ jade_tests
 .vstags
 .vscode
 *.bin
-*.vstags
+jade/*.bin
+jade/.jbuild
+jade/jade

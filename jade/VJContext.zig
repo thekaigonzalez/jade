@@ -8,13 +8,15 @@
 const std = @import("std");
 const page = std.heap.page_allocator;
 
-/// Context designed for JADE Opbindings
+/// Context designed for Opbindings
+///
+/// JADE Implementations do not need this, only used for OpenLUD & NexFUSE
 pub const jade_Context = struct {
-    pc: []u32 = undefined,
+    pc: []i32 = undefined,
     ac: usize = 0,
 
     pub fn create() !jade_Context {
-        const blk = try page.alloc(u32, 256);
+        const blk = try page.alloc(i32, 256);
 
         return jade_Context{
             .pc = blk,
@@ -22,7 +24,7 @@ pub const jade_Context = struct {
         };
     }
 
-    pub fn push(self: *jade_Context, value: u32) !void {
+    pub fn push(self: *jade_Context, value: i32) !void {
         if (self.ac >= self.pc.len) { // if we're at the end of the array
             // double the size
             self.pc = try page.realloc(self.pc, self.pc.len * 2);
@@ -32,7 +34,7 @@ pub const jade_Context = struct {
         self.ac += 1;
     }
 
-    pub fn pop(self: *jade_Context) u32 {
+    pub fn pop(self: *jade_Context) i32 {
         const arg = self.pc[self.ac - 1];
 
         self.ac -= 1;
@@ -41,7 +43,7 @@ pub const jade_Context = struct {
     }
 
     pub fn clone(self: *jade_Context) !jade_Context {
-        const blk = try page.alloc(u32, self.pc.len);
+        const blk = try page.alloc(i32, self.pc.len);
 
         @memcpy(blk, self.pc);
 
@@ -57,7 +59,7 @@ pub const jade_Context = struct {
     }
 
     /// returns 32-bit integer at index
-    pub fn at(self: *jade_Context, index: usize) u32 {
+    pub fn at(self: *jade_Context, index: usize) i32 {
         if (index >= self.pc.len or index < 0 or index > self.ac) {
             std.debug.print("jade: context index out of bounds: `{}'\n", .{index});
             std.debug.print("jade: note: max index is `{}'\n", .{self.pc.len});

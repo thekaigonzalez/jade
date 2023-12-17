@@ -55,6 +55,23 @@ pub const jade_Str = struct {
         return self.data[0..self.len];
     }
 
+    /// wrapper around std.fmt.bufPrint() for the string
+    pub fn writefmt(self: *jade_Str, comptime fmt: []const u8, args: anytype) !void {
+        const neededSpace = std.fmt.count(fmt, args);
+
+        if (self.len + neededSpace >= self.data.len) {
+            self.data = self.allocator.realloc(self.data, self.data.len + neededSpace * 2) catch {
+                std.debug.print("jade: error: out of memory\n", .{});
+                std.process.exit(1);
+            };
+        }
+
+        const slice = self.data[self.len..][0..neededSpace];
+        _ = try std.fmt.bufPrint(slice, fmt, args);
+
+        self.len += @intCast(neededSpace);
+    }
+
     pub fn destroy(self: *jade_Str) void {
         self.allocator.free(self.data);
     }

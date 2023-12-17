@@ -1,2 +1,3 @@
 m:
-  mov 1000
+  mov R1,5
+  each R1

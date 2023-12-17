@@ -14,12 +14,12 @@ if ( $ARGV[0] eq 'release' ) {
     $OPTIMIZATION_FLAGS = '-O ReleaseFast -Drelease-fast -fsingle-threaded';
 }
 
-if ( !-f '.gitignore' or -m '.gitignore' < 5 ) { # been a while lets upgrade it
+if ( !-f '../.gitignore' or -m '../.gitignore' < 1 ) { # been a while lets upgrade it
     print "[build] creating .gitignore\n";
-    open my $fh, '>', '.gitignore'
+    open my $fh, '>', '../.gitignore'
       or print
 "[build] note: could not create .gitignore: don't know but still going through with it.\n";
-    print $fh ".jbuild\n*.o\njade_tests\n.vstags\n.vscode\n*.bin\n";
+    print $fh ".jbuild\n*.o\njade_tests\n.vstags\n.vscode\n*.bin\njade/*.bin\njade/.jbuild\njade/jade";
     close $fh;
 }
 
@@ -27,27 +27,27 @@ if ( defined $zig ) {
     print "[build] zig found: $zig\n";
     print "[build] building VJTest.zig\n";
 
-    if ( not -d ".jbuild" ) {
-        `mkdir .jbuild`;
-    }
+    if (`$zig build-exe VJTest.zig --name jade_tests $OPTIMIZATION_FLAGS` > 0) { die "[build] zig build failed\n" };
+    
+    print "[build] verifying VJTest.zig\n";
 
-    # compare both VJTest.zig and .jbuild/VJTest.zig
+    if (!`valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --error-exitcode=1  --log-file=".jbuild/runner-VJTest.zig.log" ./jade_tests 2>&1 ./.jbuild/runner-VJTest.zig.valgrind.output.log`) {
+        warn "[build] VJTest.zig showing memory leaks\n";
+    };
 
-    # if ( -f '.jbuild/VJTest.zig' ) {
-    #     if ( !`cmp VJTest.zig .jbuild/VJTest.zig` ) {
-    #         print "[build] note: no source code changes!\n";
-    #         goto skip;
-    #     }
-    # }
+    print "[build] building Jade.zig\n";
 
-    `$zig build-exe VJTest.zig --name jade_tests $OPTIMIZATION_FLAGS`;
+    if (`$zig build-exe Jade.zig --name jade $OPTIMIZATION_FLAGS` > 0) { die "[build] zig build failed\n" };
+    
+    print "[build] verifying Jade.zig\n";
 
-skip:
-
-    `cp VJTest.zig .jbuild/`;
+    if (!`valgrind --leak-check=full --show-leak-kinds=all --track-origins=yes --error-exitcode=1  --log-file=".jbuild/runner-Jade.zig.log" ./jade`) {
+        warn "[build] Jade.zig showing memory leaks\n";
+    };
 }
 
-print "[build] clean artifacts (*.o)\n";
+
+print "[build] clean artifacts\n";
 
 my $artifacts_removed = 0;
 
@@ -56,6 +56,15 @@ for (`ls`) {
         `rm $_`;
         $artifacts_removed += 1;
     }
+
+    if (/\.vstags/) {
+        `rm $_`;
+        $artifacts_removed += 1;
+    }
 }
 
 printf "[build] removed %d artifacts\n", $artifacts_removed;
+print "[build] done\n";
+print "[build] binaries:\n";
+print "[build]   - ./jade_tests\n";
+print "[build]   - ./jade\n";

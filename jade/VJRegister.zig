@@ -11,7 +11,9 @@ const JadeValues = @import("VJDefit.zig");
 
 pub const jade_Reg = struct {
     data: [JadeValues.JADE_MAX_REGISTERS]i32,
-    ptr : u32 = 0,
+    ptr: u32 = 0,
+    locked: bool = false,
+    passphrase: i32 = 0,
 
     /// Creates a new register
     pub fn create() jade_Reg {
@@ -19,7 +21,7 @@ pub const jade_Reg = struct {
     }
 
     /// Writes VALUE to INDEX
-    pub fn write(self: *jade_Reg, index: u32, value: i32) void {
+    pub fn write(self: *jade_Reg, index: i32, value: i32) void {
         if (index >= JadeValues.JADE_MAX_REGISTERS) {
             std.debug.print("jade: register index out of bounds: `{}'\n", .{index});
             std.debug.print("jade: note: max index is `{}'\n", .{JadeValues.JADE_MAX_REGISTERS});
@@ -30,9 +32,27 @@ pub const jade_Reg = struct {
         self.data[index] = value;
     }
 
+    /// Locks the Register
+    pub fn lock(self: *jade_Reg, passphrase: i32) void {
+        self.locked = true;
+        self.passphrase = passphrase;
+    }
+
+    /// unlocks the register
+    pub fn unlock(self: *jade_Reg, passphrase: i32) void {
+        if (!self.locked) return;
+        
+        if (self.passphrase != passphrase) {
+            std.debug.print("jade: warning: could not unlock register because owner does not match the one that locked it\n", .{});
+        }
+
+        self.locked = false;
+        self.passphrase = 0;
+    }
+
     /// Reads INDEX from the current register, returns -1 if out of bounds
     /// returns either 0 or the value in the register
-    pub fn read(self: *jade_Reg, index: u32) i32 {
+    pub fn read(self: *jade_Reg, index: i32) i32 {
         if (index >= JadeValues.JADE_MAX_REGISTERS) {
             std.debug.print("jade: register index out of bounds: `{}'\n", .{index});
             std.debug.print("jade: note: max index is `{}'\n", .{JadeValues.JADE_MAX_REGISTERS});
@@ -42,7 +62,7 @@ pub const jade_Reg = struct {
 
         return self.data[index];
     }
-    
+
     /// Pushes VALUE onto the register
     pub fn push(self: *jade_Reg, value: i32) void {
         if (self.ptr >= JadeValues.JADE_MAX_REGISTERS) {
@@ -50,7 +70,7 @@ pub const jade_Reg = struct {
             std.debug.print("jade: note: max index is {}\n", .{JadeValues.JADE_MAX_REGISTERS});
             return;
         }
-        
+
         self.data[self.ptr] = value;
         self.ptr += 1;
     }
@@ -62,7 +82,7 @@ pub const jade_Reg = struct {
     /// register1.push(2);
     /// register1.push(3);
     /// // [1,2,3,0...]
-    /// 
+    ///
     /// const value = register1.pop(); // 3
     /// // [1,2,0...]
     /// ```
@@ -75,7 +95,7 @@ pub const jade_Reg = struct {
 
         const value: i32 = self.data[self.ptr];
         self.data[self.ptr] = 0;
-        
+
         return value;
     }
 };

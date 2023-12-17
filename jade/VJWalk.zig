@@ -14,10 +14,10 @@ const jade_CpuMode = @import("VJCpuMode.zig").jade_CpuMode;
 /// A 32-bit bytecode walker
 pub const jade_Walker32 = struct {
     mode: jade_CpuMode,
-    chunk: []u32, // this is the main thing we're walking
+    chunk: []i32, // this is the main thing we're walking
     place: usize = 0,
 
-    pub fn create(chunk: []u32) jade_Walker32 {
+    pub fn create(chunk: []i32) jade_Walker32 {
         return jade_Walker32{
             .mode = jade_CpuMode.regular,
             .chunk = chunk,
@@ -26,14 +26,58 @@ pub const jade_Walker32 = struct {
 
     /// keep in mind
     /// this function can return undefined
-    pub fn walk(self: *jade_Walker32) !u32 {
+    pub fn walk(self: *jade_Walker32) ?i32 {
         if (self.place >= self.chunk.len) {
-            return undefined;
+            return null;
         }
         const current = self.chunk[self.place];
 
         self.place += 1; // move the pointer forward
 
         return current;
+    }
+
+    /// peek
+    pub fn peek(self: *jade_Walker32) ?i32 {
+        if (self.place >= self.chunk.len) {
+            return null;
+        }
+
+        return self.chunk[self.place];
+    }
+};
+
+pub const jade_Walker8 = struct {
+    mode: jade_CpuMode,
+    chunk: []i8, // this is the main thing we're walking
+    place: usize = 0,
+
+    pub fn create(chunk: []i8) jade_Walker32 {
+        return jade_Walker8{
+            .mode = jade_CpuMode.regular,
+            .chunk = chunk,
+        };
+    }
+
+    /// keep in mind
+    /// this function can return undefined
+    pub fn walk(self: *jade_Walker8) ?i8 {
+        if (self.place >= self.chunk.len) {
+            return null;
+        }
+        const current = self.chunk[self.place];
+
+        self.place += 1; // move the pointer forward
+
+        return current;
+    }
+
+    /// peek
+    pub fn peek(self: *jade_Walker32) ?i8 {
+        if (self.place >= self.chunk.len) {
+            return null;
+        }
+
+        return self.chunk[self.place];
     }
 };
